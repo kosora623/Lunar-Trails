@@ -1,0 +1,40 @@
+This file is a sample chart in SUS format (the format Ched writes).
+Lines that do not start with # are comments.
+
+#TITLE "sample"
+#SONGID "sample"
+#ARTIST ""
+#DESIGNER ""
+#DIFFICULTY 0
+#PLAYLEVEL 3
+#WAVEOFFSET 0
+#REQUEST "ticks_per_beat 480"
+
+#BPM01: 120
+#00002: 4
+#00008: 01
+
+measure 1: taps on the six keys (lanes 2-13, two lanes per key)
+#00112: 12000000
+#00114: 00120000
+#00116: 00001200
+#00118: 12000000
+#0011a: 00001200
+#0011c: 00000012
+
+measure 2: a hold on key 1, taps on the right, ExTAP (click) on the last beat
+#00224a: 12002200
+#00218: 12121200
+#00210: 00000024
+
+measure 3: flick and damage (track) on the mouse lane
+#00310: 34000000
+#0031c: 00340000
+#00316: 00004800
+
+measure 4-5: a slide (trail) with a curve, ending with an AIR (end flick)
+#00430a: 14000000
+#00436a: 00340000
+#0043ca: 00004400
+#00534a: 00002400
+#00554: 00001400
