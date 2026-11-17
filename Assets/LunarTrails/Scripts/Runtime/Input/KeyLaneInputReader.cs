@@ -45,6 +45,16 @@ namespace LunarTrails.Runtime.Input
 
         private void OnDisable() => InputSystem.onEvent -= OnInputEvent;
 
+        /// <summary>そのレーンのキーが今押されているか（レーンを光らせる表示用。判定には使わない）。</summary>
+        public bool IsHeld(int lane)
+        {
+            var keyboard = Keyboard.current;
+            return keyboard != null && keyboard[_laneKeys[lane]].isPressed;
+        }
+
+        /// <summary>溜まっている入力を捨てる（やり直しのとき用）。</summary>
+        public void Clear() => _buffer.Clear();
+
         /// <summary>前回呼んでから押されたキーを、押された順に返す。</summary>
         public List<KeyPress> DrainPresses()
         {
