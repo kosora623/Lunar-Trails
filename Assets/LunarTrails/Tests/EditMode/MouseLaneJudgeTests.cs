@@ -116,7 +116,7 @@ namespace LunarTrails.Core.Tests
         {
             var judge = new MouseLaneJudge(ChartOf(Flick(1)));
 
-            var results = judge.Update(1.1, 0.5f, 0f);
+            var results = judge.Update(1.15, 0.5f, 0f);
 
             Assert.AreEqual(Judgement.Miss, results[0].Judgement);
         }

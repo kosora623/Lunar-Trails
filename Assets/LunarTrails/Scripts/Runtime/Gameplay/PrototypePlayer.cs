@@ -56,15 +56,50 @@ namespace LunarTrails.Runtime.Gameplay
         [Tooltip("最後のノーツから終了までの秒数")]
         [SerializeField] private double _endPaddingSeconds = 2.0;
 
-        [Header("マウスレーンの判定（仮の値。試遊で決める）")]
-        [Tooltip("フリック成功とみなす速さ（1 秒にマウスレーン何本分動いたか）")]
-        [SerializeField] private float _flickSpeedThreshold = 4f;
+        [Tooltip("判定の厳しさ（仮の値。試遊で決める）")]
+        [SerializeField] private JudgeTuning _judgeTuning = new JudgeTuning();
 
-        [Tooltip("トラック：ノーツの幅の外側に持たせる余裕（マウスレーンの幅 = 1）")]
-        [SerializeField] private float _trackMargin = 0.05f;
+        /// <summary>
+        /// 試作中に Inspector から判定の厳しさを変えるための値。初期値は Core 側の初期値と同じ。
+        /// </summary>
+        [System.Serializable]
+        private sealed class JudgeTuning
+        {
+            [Header("判定幅（ミリ秒）")]
+            public float perfectPlusMs = (float)(JudgeWindows.Default.PerfectPlus * 1000);
+            public float perfectMs = (float)(JudgeWindows.Default.Perfect * 1000);
+            public float hitMs = (float)(JudgeWindows.Default.Hit * 1000);
 
-        [Tooltip("トレイル：ボタンを離しても、この秒数以内なら押したままとみなす（指が一瞬浮いたとき用。長くしすぎると同じボタンで押し直せてしまう）")]
-        [SerializeField] private double _trailReleaseGrace = 0.05;
+            [Header("トラック")]
+            [Tooltip("ノーツの時刻の前後この秒数のうちに重なれば成功")]
+            public float trackWindow = (float)MouseJudgeSettings.Default.TrackWindow;
+            [Tooltip("ノーツの幅の外側に持たせる余裕（マウスレーンの幅 = 1）")]
+            public float trackMargin = MouseJudgeSettings.Default.TrackMargin;
+
+            [Header("フリック")]
+            [Tooltip("成功とみなす速さ（1 秒にマウスレーン何本分動いたか）")]
+            public float flickSpeedThreshold = MouseJudgeSettings.Default.FlickSpeedThreshold;
+
+            [Header("トレイル")]
+            [Tooltip("途中のチェックの、前後の猶予（秒）")]
+            public float trailTickWindow = (float)MouseJudgeSettings.Default.TrailTickWindow;
+            [Tooltip("帯の幅の外側に持たせる余裕（マウスレーンの幅 = 1）")]
+            public float trailMargin = MouseJudgeSettings.Default.TrailMargin;
+            [Tooltip("ボタンを離しても、この秒数以内なら押したままとみなす（指が一瞬浮いたとき用。長くしすぎると同じボタンで押し直せてしまう）")]
+            public float trailReleaseGrace = (float)MouseJudgeSettings.Default.TrailReleaseGrace;
+
+            public JudgeWindows ToWindows() => new JudgeWindows(perfectPlusMs / 1000.0, perfectMs / 1000.0, hitMs / 1000.0);
+
+            public MouseJudgeSettings ToMouseSettings() => new MouseJudgeSettings
+            {
+                TrackWindow = trackWindow,
+                TrackMargin = trackMargin,
+                FlickSpeedThreshold = flickSpeedThreshold,
+                TrailTickWindow = trailTickWindow,
+                TrailMargin = trailMargin,
+                TrailReleaseGrace = trailReleaseGrace,
+            };
+        }
 
         // オートプレイの叩く音を、どれだけ先まで予約しておくか（秒）
         private const double HitSoundLookAhead = 0.2;
@@ -141,13 +176,9 @@ namespace LunarTrails.Runtime.Gameplay
             _input.Clear();
             _mouse.Clear();
 
-            _judge = new KeyLaneJudge(_chart);
-            _mouseJudge = new MouseLaneJudge(_chart, settings: new MouseJudgeSettings
-            {
-                FlickSpeedThreshold = _flickSpeedThreshold,
-                TrackMargin = _trackMargin,
-                TrailReleaseGrace = _trailReleaseGrace,
-            });
+            var windows = _judgeTuning.ToWindows();
+            _judge = new KeyLaneJudge(_chart, windows);
+            _mouseJudge = new MouseLaneJudge(_chart, windows, _judgeTuning.ToMouseSettings());
             _previousGameTime = double.NegativeInfinity;
             _autoPlayer = new AutoPlay(_chart);
             _stats = new JudgeStats();
@@ -281,7 +312,7 @@ namespace LunarTrails.Runtime.Gameplay
         private void UpdateHud(double gameTime, float cursorSpeed)
         {
             _hud.CursorSpeed = cursorSpeed;
-            _hud.FlickSpeedThreshold = _flickSpeedThreshold;
+            _hud.FlickSpeedThreshold = _judgeTuning.flickSpeedThreshold;
             _hud.Stats = _stats;
             _hud.Title = $"{_chart.Song} [{_chart.Difficulty}] Lv.{_chart.Level}";
             _hud.AutoPlay = _autoPlay;
