@@ -1,3 +1,4 @@
+using LunarTrails.Core.Charts;
 using LunarTrails.Core.Judging;
 using LunarTrails.Core.Scoring;
 using UnityEngine;
@@ -39,6 +40,21 @@ namespace LunarTrails.Runtime.View
 
         public void ClearJudgement() => _lastResult = null;
 
+        // どのノーツの判定かを表す名前（判定の文字の下に出す）
+        private static string NoteLabel(JudgeResult r)
+        {
+            switch (r.Note.Type)
+            {
+                case NoteType.Tap: return "タップ";
+                case NoteType.Long: return "ロング";
+                case NoteType.Click: return "クリック";
+                case NoteType.Track: return "トラック";
+                case NoteType.Flick: return "フリック";
+                case NoteType.Trail: return "トレイル";
+                default: return r.Note.Type.ToString();
+            }
+        }
+
         private void OnGUI()
         {
             if (_bigStyle == null)
@@ -59,9 +75,10 @@ namespace LunarTrails.Runtime.View
                     Judgement.Hit => "HIT",
                     _ => "MISS",
                 };
+                text += $"\n<size=20>{NoteLabel(r)}</size>";
                 if (r.OffsetSeconds.HasValue)
                     text += $"\n<size=20>{r.OffsetSeconds.Value * 1000:+0;-0;0}ms</size>";
-                GUI.Label(new Rect(0, Screen.height * 0.45f, Screen.width, 120), text, _bigStyle);
+                GUI.Label(new Rect(0, Screen.height * 0.45f, Screen.width, 150), text, _bigStyle);
             }
 
             if (Result != null)
