@@ -3,12 +3,12 @@ using System;
 namespace LunarTrails.Core.Judging
 {
     /// <summary>
-    /// 判定幅（秒）。値は企画書の仮の値（±40 / 60 / 90ms）。試作で叩いて調整する前提なので、
-    /// 調整するときはここ（または Default を使っている箇所）だけ直せばよい。
+    /// 判定幅（秒）。企画書の仮の値は ±40 / 60 / 90ms だったが、試作で「少し厳しい」とのことで
+    /// ±45 / 70 / 100ms に広げている。試作中は PrototypePlayer の Inspector からも変えられる。
     /// </summary>
     public sealed class JudgeWindows
     {
-        public static readonly JudgeWindows Default = new JudgeWindows(0.040, 0.060, 0.090);
+        public static readonly JudgeWindows Default = new JudgeWindows(0.045, 0.070, 0.100);
 
         // 浮動小数点の誤差で、ちょうど 40ms のずれが 40.0000000001ms と計算されて
         // 1段下の判定になるのを防ぐための余裕（1マイクロ秒）。
