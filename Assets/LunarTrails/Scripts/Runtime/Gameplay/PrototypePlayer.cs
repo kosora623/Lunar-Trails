@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using LunarTrails.Core.Charts;
 using LunarTrails.Core.Judging;
+using LunarTrails.Core.Scoring;
 using LunarTrails.Core.Timing;
 using LunarTrails.Runtime.Audio;
 using LunarTrails.Runtime.Charts;
@@ -185,6 +186,7 @@ namespace LunarTrails.Runtime.Gameplay
             _judgedNotes.Clear();
             _nextHitSound = 0;
             _hud.ClearJudgement();
+            _hud.Result = null;
             _view.BuildNotes(_chart);
 
             _clock.Play(_leadInSeconds);
@@ -317,7 +319,13 @@ namespace LunarTrails.Runtime.Gameplay
             _hud.Title = $"{_chart.Song} [{_chart.Difficulty}] Lv.{_chart.Level}";
             _hud.AutoPlay = _autoPlay;
             _hud.OffsetMs = _offset.Milliseconds;
-            _hud.Finished = gameTime > _endTime + _endPaddingSeconds;
+            // 最後のノーツから少し待ったら、リザルトを出す（1 回だけ計算する）
+            if (_hud.Result == null && gameTime > _endTime + _endPaddingSeconds)
+            {
+                var result = new PlayResult(_stats);
+                _hud.Result = result;
+                Debug.Log($"リザルト: 達成率 {result.AchievementRate:0.0000}% {PlayResult.LampLabel(result.Lamp)} 最大コンボ {result.MaxCombo}");
+            }
         }
     }
 }

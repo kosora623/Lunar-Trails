@@ -1,4 +1,5 @@
 using LunarTrails.Core.Judging;
+using LunarTrails.Core.Scoring;
 using UnityEngine;
 
 namespace LunarTrails.Runtime.View
@@ -15,13 +16,15 @@ namespace LunarTrails.Runtime.View
         private float _lastResultAt;
         private GUIStyle _bigStyle;
         private GUIStyle _smallStyle;
+        private GUIStyle _resultStyle;
 
         // PrototypePlayer が毎フレーム入れる値
         public JudgeStats Stats;
         public string Title = "";
         public bool AutoPlay;
         public int OffsetMs;
-        public bool Finished;
+        /// <summary>曲が終わったら入る。入っている間はリザルトを表示する。</summary>
+        public PlayResult Result;
         public float CursorSpeed;
         public float FlickSpeedThreshold;
 
@@ -42,6 +45,7 @@ namespace LunarTrails.Runtime.View
             {
                 _bigStyle = new GUIStyle(GUI.skin.label) { fontSize = 40, alignment = TextAnchor.MiddleCenter, richText = true };
                 _smallStyle = new GUIStyle(GUI.skin.label) { fontSize = 16 };
+                _resultStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.UpperLeft };
             }
 
             // 判定の文字（画面の中央少し下）
@@ -58,6 +62,12 @@ namespace LunarTrails.Runtime.View
                 if (r.OffsetSeconds.HasValue)
                     text += $"\n<size=20>{r.OffsetSeconds.Value * 1000:+0;-0;0}ms</size>";
                 GUI.Label(new Rect(0, Screen.height * 0.45f, Screen.width, 120), text, _bigStyle);
+            }
+
+            if (Result != null)
+            {
+                DrawResult(Result);
+                return;
             }
 
             if (Stats == null) return;
@@ -81,9 +91,36 @@ namespace LunarTrails.Runtime.View
                 $"コンボ {Stats.Combo}（最大 {Stats.MaxCombo}）\n" +
                 $"カーソルの速さ {Mathf.Min(_shownSpeed, 99f):0.0}（フリック成功は {FlickSpeedThreshold:0.0} 以上）\n" +
                 $"\n" +
-                $"R: 最初からやり直す　Esc: マウスの固定を外す\n" +
-                (Finished ? "\n― 終了 ―" : "");
+                $"R: 最初からやり直す　Esc: マウスの固定を外す\n";
             GUI.Label(new Rect(16, 16, 600, 400), info, _smallStyle);
+        }
+
+        // リザルト：画面中央に黒い箱を出し、その上に文字だけで並べる
+        private void DrawResult(PlayResult r)
+        {
+            float width = 520, height = 420;
+            var box = new Rect((Screen.width - width) / 2, (Screen.height - height) / 2, width, height);
+            GUI.Box(box, GUIContent.none);
+
+            string average = r.AverageOffset.HasValue ? $"{r.AverageOffset.Value * 1000:+0;-0;0}ms" : "-";
+            string text =
+                $"{Title}\n" +
+                (AutoPlay ? "（オートプレイ）\n" : "\n") +
+                $"\n" +
+                $"<size=40>{r.AchievementRate:0.0000}%</size>\n" +
+                $"{PlayResult.LampLabel(r.Lamp)}\n" +
+                $"\n" +
+                $"PERFECT+  {r.PerfectPlus}\n" +
+                $"PERFECT   {r.Perfect}\n" +
+                $"HIT       {r.Hit}\n" +
+                $"MISS      {r.Miss}\n" +
+                $"\n" +
+                $"最大コンボ {r.MaxCombo} / {r.Total}\n" +
+                $"FAST {r.FastCount}  SLOW {r.SlowCount}  ずれの平均 {average}\n" +
+                $"\n" +
+                $"R: もう一度";
+            _resultStyle.richText = true;
+            GUI.Label(new Rect(box.x + 32, box.y + 24, width - 64, height - 48), text, _resultStyle);
         }
     }
 }
