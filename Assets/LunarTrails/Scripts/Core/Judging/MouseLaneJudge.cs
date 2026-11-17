@@ -15,7 +15,9 @@ namespace LunarTrails.Core.Judging
     ///   方向と位置は問わない。ずれはそのフレームの時刻で測るので、フレーム単位（60fps で最大約 17ms）の誤差がある。
     /// - トレイル：次の 3 つに分けて判定する。
     ///   1. 始点：クリックノーツと同じ（タイミングで 4 段階、位置は問わない）
-    ///   2. 途中：TrailTickBeats 拍ごとのチェック。ボタンを押したまま、カーソルが帯の中にあれば PERFECT+、なければ MISS
+    ///   2. 途中：TrailTickBeats 拍ごとのチェック。ボタンを押したまま、カーソルが帯の中にあれば PERFECT+、なければ MISS。
+    ///      ボタンを離しても TrailReleaseGrace 秒以内なら押したままとみなす（トレイル上のクリックを押し直せるように）。
+    ///      企画書の想定どおり、片方のボタンでなぞりながらもう片方のボタンでクリックしてもよい。
     ///   3. 終点のフリック（endFlick のときだけ）：普通のフリックと同じ
     ///   どれも 1 つの判定として数える（コンボや判定の数に入る）。
     ///
@@ -41,6 +43,7 @@ namespace LunarTrails.Core.Judging
         private readonly List<Note> _clicks;          // クリックとトレイルの始点（時刻順）
         private readonly List<Note> _positional;      // トラックとフリック、トレイル終点のフリック（時刻順）
         private readonly List<TrailTick> _trailTicks; // トレイルの途中のチェック（時刻順）
+        private double _lastHeldTime = double.NegativeInfinity; // 最後にボタンが押されていたゲームの時刻
 
         public MouseLaneJudge(Chart chart, JudgeWindows windows = null, MouseJudgeSettings settings = null)
         {
@@ -105,8 +108,11 @@ namespace LunarTrails.Core.Judging
         public List<JudgeResult> Update(double gameTime, float cursorX, float cursorSpeed, bool buttonHeld = false)
         {
             var results = new List<JudgeResult>();
+            if (buttonHeld) _lastHeldTime = gameTime;
+            bool heldWithGrace = gameTime - _lastHeldTime <= _settings.TrailReleaseGrace;
+
             JudgePositional(gameTime, cursorX, cursorSpeed, results);
-            JudgeTrailTicks(gameTime, cursorX, buttonHeld, results);
+            JudgeTrailTicks(gameTime, cursorX, heldWithGrace, results);
 
             while (_clicks.Count > 0 && _windows.IsTooLate(gameTime - _clicks[0].Time))
             {

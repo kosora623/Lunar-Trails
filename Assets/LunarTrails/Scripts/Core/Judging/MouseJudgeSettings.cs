@@ -25,5 +25,11 @@ namespace LunarTrails.Core.Judging
 
         /// <summary>トレイル：帯の幅の外側に持たせる余裕（片側）</summary>
         public float TrailMargin = 0.08f;
+
+        /// <summary>
+        /// トレイル：ボタンを離しても、この秒数以内なら押したままとみなす。
+        /// トレイルの上に来たクリックを同じボタンで押し直すときや、トラックパッドで指が一瞬離れたときに切れないようにする。
+        /// </summary>
+        public double TrailReleaseGrace = 0.15;
     }
 }
