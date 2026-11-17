@@ -31,7 +31,24 @@ namespace LunarTrails.Runtime.Input
         /// <summary>カーソルの速さ（1 秒にマウスレーン何本分か）。端で止まっていても、マウスを動かした分で計算する。</summary>
         public float Speed { get; private set; }
 
-        public float PixelsPerLane => _pixelsPerLane;
+        public float PixelsPerLane
+        {
+            get => _pixelsPerLane;
+            set => _pixelsPerLane = Mathf.Max(1f, value);
+        }
+
+        /// <summary>カーソルを固定するか。メニューでは外し、プレイ中だけ固定する。</summary>
+        public bool CaptureCursor
+        {
+            get => _captureCursor;
+            set
+            {
+                _captureCursor = value;
+                LockCursor(value);
+            }
+        }
+
+        private bool _captureCursor = true;
 
         /// <summary>マウスのボタン（左右どちらか）を押しているか。トレイルの判定に使う。</summary>
         public bool IsButtonHeld
@@ -46,7 +63,7 @@ namespace LunarTrails.Runtime.Input
         private void OnEnable()
         {
             InputSystem.onEvent += OnInputEvent;
-            LockCursor(true);
+            LockCursor(_captureCursor);
         }
 
         private void OnDisable()
@@ -61,7 +78,7 @@ namespace LunarTrails.Runtime.Input
             if (mouse == null) return;
 
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) LockCursor(false);
-            if (mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) LockCursor(true);
+            if (_captureCursor && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) LockCursor(true);
 
             // delta は、このフレームの間にマウスが動いた量（ピクセル）
             float moved = mouse.delta.ReadValue().x / _pixelsPerLane;

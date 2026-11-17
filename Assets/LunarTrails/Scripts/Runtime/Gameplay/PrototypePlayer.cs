@@ -2,10 +2,12 @@ using System.Collections.Generic;
 using LunarTrails.Core.Charts;
 using LunarTrails.Core.Judging;
 using LunarTrails.Core.Scoring;
+using LunarTrails.Core.Settings;
 using LunarTrails.Core.Timing;
 using LunarTrails.Runtime.Audio;
 using LunarTrails.Runtime.Charts;
 using LunarTrails.Runtime.Input;
+using LunarTrails.Runtime.Settings;
 using LunarTrails.Runtime.View;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -13,19 +15,18 @@ using UnityEngine.InputSystem;
 namespace LunarTrails.Runtime.Gameplay
 {
     /// <summary>
-    /// 試作用のプレイ画面：譜面を読み込んで曲を鳴らし、ノーツを流して 6K のタップを判定する。
-    /// 見た目は仮（Unity 標準の立方体と文字だけ）。
+    /// 試作用のプレイ画面：譜面を読み込んで曲を鳴らし、ノーツを流して判定する。
+    /// 見た目は仮（Unity 標準の立方体と文字だけ）。選曲と設定は PrototypeMenu が受け持つ。
     /// </summary>
     /// <remarks>
     /// 試作シーンの組み立て方：
     /// 1. シーンに空の GameObject を置き、PrototypePlayer を付ける（必要な部品は自動で付く）。
-    /// 2. Chart Json に譜面（例：Charts/sample_stl.json）を入れる。
-    /// 3. 曲を鳴らすなら AudioSource の AudioClip に曲を入れる。空でも動く（叩く音だけで確認できる）。
-    /// 4. 再生する。S D F J K L で叩き、マウスでカーソルを動かす・クリックする・払う。
-    ///    Auto Play を ON にすると自動で取る。Esc でマウスの固定を外し、ゲーム画面のクリックで戻す。
+    /// 2. Songs に曲を登録する。1 曲ごとに、曲名・音声（空でもよい）・譜面（難易度の数だけ）を入れる。
+    ///    Songs が空のときは、Chart Json に入れた譜面 1 つと、AudioSource の AudioClip を 1 曲として使う。
+    /// 3. 再生すると選曲画面が出る。曲と難易度を選んで Enter で開始。
+    ///    プレイ中は S D F J K L で叩き、マウスでカーソルを動かす・クリックする・払う。Esc で選曲に戻る。
     ///
     /// サンプル譜面は BPM 120・オフセット 0 なので、曲を入れるなら頭から一定の BPM 120 の曲を使う。
-    /// マウスノーツを試すなら sample_mouse.json を使う。
     ///
     /// 時刻の扱い：
     /// - 曲の再生位置 … AudioSourceSongClock が返す、音声側の正確な時刻
@@ -44,8 +45,21 @@ namespace LunarTrails.Runtime.Gameplay
     [RequireComponent(typeof(PrototypeHud))]
     public sealed class PrototypePlayer : MonoBehaviour
     {
-        private const string OffsetPrefsKey = "LunarTrails.PlayerOffsetMs";
+        /// <summary>選曲画面に並べる 1 曲分。</summary>
+        [System.Serializable]
+        public sealed class SongEntry
+        {
+            public string title;
+            [Tooltip("曲の音声。空でも遊べる（叩く音だけで確認できる）")]
+            public AudioClip audio;
+            [Tooltip("この曲の譜面（難易度ごとに 1 つ）")]
+            public TextAsset[] charts;
+        }
 
+        [Tooltip("選曲画面に並べる曲")]
+        [SerializeField] private SongEntry[] _songs = new SongEntry[0];
+
+        [Tooltip("Songs が空のときだけ使う譜面（以前の試作シーンとの互換用）")]
         [SerializeField] private TextAsset _chartJson;
 
         [Tooltip("ON にすると、全ノーツをちょうどの時刻に自動で叩く（譜面と曲のずれ確認用）")]
@@ -105,6 +119,7 @@ namespace LunarTrails.Runtime.Gameplay
         // オートプレイの叩く音を、どれだけ先まで予約しておくか（秒）
         private const double HitSoundLookAhead = 0.2;
 
+        private AudioSource _music;
         private AudioSourceSongClock _clock;
         private KeyLaneInputReader _input;
         private MouseLaneInputReader _mouse;
@@ -113,7 +128,8 @@ namespace LunarTrails.Runtime.Gameplay
         private PrototypeHud _hud;
 
         private Chart _chart;
-        private PlayerOffset _offset;
+        private PlayerOffset _offset = new PlayerOffset();
+        private GameSettings _settings;
 
         // 1 回のプレイごとに作り直すもの
         private KeyLaneJudge _judge;
@@ -126,8 +142,33 @@ namespace LunarTrails.Runtime.Gameplay
         private int _nextHitSound;
         private double _endTime;
 
+        /// <summary>今プレイ中か（リザルト表示中も含む）。false のときは選曲・設定画面。</summary>
+        public bool IsPlaying { get; private set; }
+
+        /// <summary>プレイが終わってメニューに戻るときに呼ばれる。</summary>
+        public event System.Action ReturnedToMenu;
+
+        public bool AutoPlayEnabled
+        {
+            get => _autoPlay;
+            set => _autoPlay = value;
+        }
+
+        /// <summary>選曲画面に並べる曲。Songs が空なら、Chart Json と AudioSource の音声を 1 曲として返す。</summary>
+        public IReadOnlyList<SongEntry> Songs
+        {
+            get
+            {
+                if (_songs != null && _songs.Length > 0) return _songs;
+                if (_chartJson == null) return new SongEntry[0];
+                var music = GetComponent<AudioSource>();
+                return new[] { new SongEntry { title = _chartJson.name, audio = music != null ? music.clip : null, charts = new[] { _chartJson } } };
+            }
+        }
+
         private void Awake()
         {
+            _music = GetComponent<AudioSource>();
             _clock = GetComponent<AudioSourceSongClock>();
             _input = GetComponent<KeyLaneInputReader>();
             // RequireComponent は、すでにシーンに置いてある PrototypePlayer には後から部品を足さないので、ここで補う
@@ -136,37 +177,56 @@ namespace LunarTrails.Runtime.Gameplay
             _hitSound = GetComponent<HitSoundPlayer>();
             _view = GetComponent<PlayfieldView>();
             _hud = GetComponent<PrototypeHud>();
-            _offset = new PlayerOffset(PlayerPrefs.GetInt(OffsetPrefsKey, 0));
+            if (GetComponent<PrototypeMenu>() == null) gameObject.AddComponent<PrototypeMenu>();
+
+            ApplySettings(SettingsStore.Load());
         }
+
+        /// <summary>設定を反映する（設定画面で値を変えたときにも呼ばれる）。保存はしない。</summary>
+        public void ApplySettings(GameSettings settings)
+        {
+            _settings = settings;
+            _offset.Milliseconds = settings.offsetMs;
+            _view.ScrollSpeed = settings.scrollSpeed;
+            _mouse.PixelsPerLane = settings.pixelsPerLane;
+            _input.SetLaneKeys(settings.laneKeys);
+        }
+
+        public GameSettings CurrentSettings => _settings;
 
         private void Start()
         {
-            if (_chartJson == null)
-            {
-                Debug.LogError("PrototypePlayer の Chart Json に譜面ファイルを入れてください。", this);
-                enabled = false;
-                return;
-            }
-
-            try
-            {
-                _chart = ChartLoader.FromTextAsset(_chartJson);
-            }
-            catch (ChartFormatException e)
-            {
-                Debug.LogError($"譜面を読み込めませんでした: {e.Message}", this);
-                enabled = false;
-                return;
-            }
-
-            Debug.Log($"譜面を読み込みました: {_chart.Song} [{_chart.Difficulty}] ノーツ {_chart.Notes.Count} 個");
-
             _view.BuildStage(Camera.main);
+            _mouse.CaptureCursor = false;
+        }
+
+        /// <summary>選曲画面から呼ぶ：指定した譜面と曲で遊び始める。</summary>
+        public void Play(Chart chart, AudioClip audio)
+        {
+            _chart = chart;
+            _music.clip = audio;
             _hitSoundTimes = CollectHitSoundTimes(_chart);
             _endTime = 0;
             foreach (var note in _chart.Notes) _endTime = System.Math.Max(_endTime, note.EndTime);
 
+            Debug.Log($"開始: {_chart.Song} [{_chart.Difficulty}] ノーツ {_chart.Notes.Count} 個");
+            IsPlaying = true;
+            _mouse.CaptureCursor = true;
             StartPlay();
+        }
+
+        /// <summary>プレイをやめて選曲画面に戻る。</summary>
+        public void ReturnToMenu()
+        {
+            _clock.Stop();
+            _hitSound.StopAll();
+            _view.ClearNotes();
+            _hud.Stats = null;
+            _hud.Result = null;
+            _hud.ClearJudgement();
+            _mouse.CaptureCursor = false;
+            IsPlaying = false;
+            ReturnedToMenu?.Invoke();
         }
 
         /// <summary>最初から遊ぶ（R キーでも呼ばれる）。</summary>
@@ -194,7 +254,9 @@ namespace LunarTrails.Runtime.Gameplay
 
         private void Update()
         {
+            if (!IsPlaying) return;
             HandleDebugKeys();
+            if (!IsPlaying) return; // Esc でメニューに戻った
 
             double songTime = _clock.SongTime;
             double gameTime = _offset.ToGameTime(songTime);
@@ -302,13 +364,19 @@ namespace LunarTrails.Runtime.Gameplay
             if (keyboard.upArrowKey.wasPressedThisFrame) ChangeOffset(+step);
             if (keyboard.downArrowKey.wasPressedThisFrame) ChangeOffset(-step);
             if (keyboard.rKey.wasPressedThisFrame) StartPlay();
+
+            // Esc はプレイ中ならやめて戻る。リザルト表示中は Enter でも戻れる
+            bool showingResult = _hud.Result != null;
+            if (keyboard.escapeKey.wasPressedThisFrame || (showingResult && keyboard.enterKey.wasPressedThisFrame))
+                ReturnToMenu();
         }
 
+        // プレイ中のオフセット変更も、設定として保存する
         private void ChangeOffset(int deltaMs)
         {
             _offset.Milliseconds += deltaMs;
-            PlayerPrefs.SetInt(OffsetPrefsKey, _offset.Milliseconds);
-            PlayerPrefs.Save();
+            _settings.offsetMs = _offset.Milliseconds;
+            SettingsStore.Save(_settings);
         }
 
         private void UpdateHud(double gameTime, float cursorSpeed)
