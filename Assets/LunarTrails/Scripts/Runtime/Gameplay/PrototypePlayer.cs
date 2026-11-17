@@ -6,6 +6,7 @@ using LunarTrails.Core.Settings;
 using LunarTrails.Core.Timing;
 using LunarTrails.Runtime.Audio;
 using LunarTrails.Runtime.Charts;
+using LunarTrails.Runtime.Flow;
 using LunarTrails.Runtime.Input;
 using LunarTrails.Runtime.Settings;
 using LunarTrails.Runtime.View;
@@ -34,7 +35,8 @@ namespace LunarTrails.Runtime.Gameplay
     /// オートプレイの叩く音は「曲の再生位置」でノーツの時刻ちょうどに鳴らす。
     /// そのため、オートプレイで曲と叩く音がずれて聞こえたら、それは譜面の offsetMs か BPM のずれ。
     ///
-    /// 本番のゲーム進行クラスができたら、このクラスは消すか置き換える。
+    /// 本番の流れ（タイトル → 選曲 → プレイ → リザルト）は GameDirector が受け持ち、このクラスはそのプレイ画面として使う。
+    /// GameDirector を付けずに置けば、これまでどおり PrototypeMenu の簡易な選曲画面で遊べる。
     /// </remarks>
     [RequireComponent(typeof(AudioSource))]
     [RequireComponent(typeof(AudioSourceSongClock))]
@@ -141,12 +143,25 @@ namespace LunarTrails.Runtime.Gameplay
         private List<double> _hitSoundTimes;
         private int _nextHitSound;
         private double _endTime;
+        private bool _finished;   // 最後のノーツが過ぎて、結果が出たか
 
         /// <summary>今プレイ中か（リザルト表示中も含む）。false のときは選曲・設定画面。</summary>
         public bool IsPlaying { get; private set; }
 
-        /// <summary>プレイが終わってメニューに戻るときに呼ばれる。</summary>
+        /// <summary>プレイが終わってメニューに戻るときに呼ばれる（Esc でやめたときも）。</summary>
         public event System.Action ReturnedToMenu;
+
+        /// <summary>最後のノーツが過ぎて結果が出たときに 1 回だけ呼ばれる（途中でやめたときは呼ばれない）。</summary>
+        public event System.Action<PlayResult> Finished;
+
+        /// <summary>
+        /// 結果をプレイ画面の上に出すか。試作の流れでは true。
+        /// GameDirector はリザルト画面を別に出すので false にする。
+        /// </summary>
+        public bool ShowResultOnHud { get; set; } = true;
+
+        /// <summary>今遊んでいる譜面（プレイ中でなければ最後に遊んだ譜面）</summary>
+        public Chart CurrentChart => _chart;
 
         public bool AutoPlayEnabled
         {
@@ -177,7 +192,9 @@ namespace LunarTrails.Runtime.Gameplay
             _hitSound = GetComponent<HitSoundPlayer>();
             _view = GetComponent<PlayfieldView>();
             _hud = GetComponent<PrototypeHud>();
-            if (GetComponent<PrototypeMenu>() == null) gameObject.AddComponent<PrototypeMenu>();
+            // 本番の流れ（GameDirector）がなければ、試作の選曲画面を付ける
+            if (GetComponent<PrototypeMenu>() == null && GetComponent<GameDirector>() == null)
+                gameObject.AddComponent<PrototypeMenu>();
 
             ApplySettings(SettingsStore.Load());
         }
@@ -215,8 +232,18 @@ namespace LunarTrails.Runtime.Gameplay
             StartPlay();
         }
 
-        /// <summary>プレイをやめて選曲画面に戻る。</summary>
+        /// <summary>プレイをやめて選曲画面に戻る（ReturnedToMenu を呼ぶ）。</summary>
         public void ReturnToMenu()
+        {
+            Stop();
+            ReturnedToMenu?.Invoke();
+        }
+
+        /// <summary>
+        /// 曲と判定を止めて、プレイ画面を片付ける。イベントは呼ばない。
+        /// GameDirector が、結果が出たあとリザルト画面へ移るときに使う。
+        /// </summary>
+        public void Stop()
         {
             _clock.Stop();
             _hitSound.StopAll();
@@ -226,7 +253,6 @@ namespace LunarTrails.Runtime.Gameplay
             _hud.ClearJudgement();
             _mouse.CaptureCursor = false;
             IsPlaying = false;
-            ReturnedToMenu?.Invoke();
         }
 
         /// <summary>最初から遊ぶ（R キーでも呼ばれる）。</summary>
@@ -245,6 +271,7 @@ namespace LunarTrails.Runtime.Gameplay
             _stats = new JudgeStats();
             _judgedNotes.Clear();
             _nextHitSound = 0;
+            _finished = false;
             _hud.ClearJudgement();
             _hud.Result = null;
             _view.BuildNotes(_chart);
@@ -300,8 +327,21 @@ namespace LunarTrails.Runtime.Gameplay
                 Apply(miss, playSound: false);
 
             _view.Render(gameTime, note => _judgedNotes.Contains(note.Index), lane => !_autoPlay && _input.IsHeld(lane), cursorX);
-            UpdateHud(gameTime, cursorSpeed);
+            UpdateHud(cursorSpeed);
             _previousGameTime = gameTime;
+
+            // 最後のノーツから少し待ったら、結果を出す（1 回だけ）。
+            // Finished の受け手がプレイを止めることがあるので、Update の最後で呼ぶ
+            if (!_finished && gameTime > _endTime + _endPaddingSeconds) Finish();
+        }
+
+        private void Finish()
+        {
+            _finished = true;
+            var result = new PlayResult(_stats);
+            if (ShowResultOnHud) _hud.Result = result;
+            Debug.Log($"リザルト: 達成率 {result.AchievementRate:0.0000}% {PlayResult.LampLabel(result.Lamp)} 最大コンボ {result.MaxCombo}");
+            Finished?.Invoke(result);
         }
 
         private void Apply(JudgeResult? result, bool playSound)
@@ -366,7 +406,7 @@ namespace LunarTrails.Runtime.Gameplay
             if (keyboard.rKey.wasPressedThisFrame) StartPlay();
 
             // Esc はプレイ中ならやめて戻る。リザルト表示中は Enter でも戻れる
-            bool showingResult = _hud.Result != null;
+            bool showingResult = _finished && ShowResultOnHud;
             if (keyboard.escapeKey.wasPressedThisFrame || (showingResult && keyboard.enterKey.wasPressedThisFrame))
                 ReturnToMenu();
         }
@@ -379,7 +419,7 @@ namespace LunarTrails.Runtime.Gameplay
             SettingsStore.Save(_settings);
         }
 
-        private void UpdateHud(double gameTime, float cursorSpeed)
+        private void UpdateHud(float cursorSpeed)
         {
             _hud.CursorSpeed = cursorSpeed;
             _hud.FlickSpeedThreshold = _judgeTuning.flickSpeedThreshold;
@@ -387,13 +427,6 @@ namespace LunarTrails.Runtime.Gameplay
             _hud.Title = $"{_chart.Song} [{_chart.Difficulty}] Lv.{_chart.Level}";
             _hud.AutoPlay = _autoPlay;
             _hud.OffsetMs = _offset.Milliseconds;
-            // 最後のノーツから少し待ったら、リザルトを出す（1 回だけ計算する）
-            if (_hud.Result == null && gameTime > _endTime + _endPaddingSeconds)
-            {
-                var result = new PlayResult(_stats);
-                _hud.Result = result;
-                Debug.Log($"リザルト: 達成率 {result.AchievementRate:0.0000}% {PlayResult.LampLabel(result.Lamp)} 最大コンボ {result.MaxCombo}");
-            }
         }
     }
 }
