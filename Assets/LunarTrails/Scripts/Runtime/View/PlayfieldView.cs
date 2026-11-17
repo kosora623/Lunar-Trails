@@ -32,6 +32,7 @@ namespace LunarTrails.Runtime.View
         private Material _laneMaterial;
         private Material _laneHeldMaterial;
         private Transform _noteRoot;
+        private Transform _cursor;
 
         private sealed class NoteObject
         {
@@ -75,6 +76,10 @@ namespace LunarTrails.Runtime.View
                 new Vector3(MouseLaneWidth * 0.98f, 0.02f, LaneLength),
                 Materials.Get(new Color(0.1f, 0.1f, 0.12f)));
 
+            // マウスレーンのカーソル（判定ラインの上に置く白い板）
+            _cursor = CreateBox("MouseCursor", transform, new Vector3(0, 0.08f, 0),
+                new Vector3(0.12f, 0.06f, 0.6f), Materials.Get(new Color(0.9f, 0.9f, 0.9f))).transform;
+
             float totalWidth = MouseLaneWidth + KeyLaneWidth * 6;
             CreateBox("JudgeLine", transform, Vector3.zero,
                 new Vector3(totalWidth, 0.05f, 0.08f), Materials.Get(Color.white));
@@ -105,8 +110,11 @@ namespace LunarTrails.Runtime.View
         /// <param name="gameTime">ゲームの時刻（秒）。オフセット調整済みのもの。</param>
         /// <param name="isJudged">判定済み（もう表示しない）ノーツかを返す関数</param>
         /// <param name="isLaneHeld">キーレーンが押されているかを返す関数</param>
-        public void Render(double gameTime, System.Func<Note, bool> isJudged, System.Func<int, bool> isLaneHeld)
+        /// <param name="cursorX">マウスレーン内のカーソル位置（0 = 左端、1 = 右端）</param>
+        public void Render(double gameTime, System.Func<Note, bool> isJudged, System.Func<int, bool> isLaneHeld, float cursorX)
         {
+            SetX(_cursor, MouseLaneX(cursorX));
+
             for (int lane = 0; lane < Chart.KeyLaneCount; lane++)
                 _keyLaneRenderers[lane].sharedMaterial = isLaneHeld(lane) ? _laneHeldMaterial : _laneMaterial;
 
@@ -213,6 +221,12 @@ namespace LunarTrails.Runtime.View
         // ===== 小さな道具 =====
 
         private float ZAt(double noteTime, double gameTime) => (float)((noteTime - gameTime) * _scrollSpeed);
+
+        private static void SetX(Transform t, float x)
+        {
+            var p = t.localPosition;
+            t.localPosition = new Vector3(x, p.y, p.z);
+        }
 
         private static void SetZ(Transform t, float z)
         {

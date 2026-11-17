@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "song": "sample_mouse",
+  "difficulty": "lnr",
+  "level": 9,
+  "offsetMs": 0,
+  "bpm": [{ "beat": 0, "value": 120 }],
+  "notes": [
+    { "type": "click", "beat": 4 },
+    { "type": "click", "beat": 5 },
+    { "type": "click", "beat": 6 },
+    { "type": "click", "beat": 7 },
+
+    { "type": "track", "beat": 8,    "x": 0.2, "size": 0.2 },
+    { "type": "track", "beat": 9,    "x": 0.5, "size": 0.2 },
+    { "type": "track", "beat": 10,   "x": 0.8, "size": 0.2 },
+    { "type": "track", "beat": 11,   "x": 0.5, "size": 0.2 },
+
+    { "type": "track", "beat": 12,   "x": 0.15, "size": 0.2 },
+    { "type": "flick", "beat": 13,   "x": 0.7,  "size": 0.5 },
+    { "type": "track", "beat": 14,   "x": 0.85, "size": 0.2 },
+    { "type": "flick", "beat": 15,   "x": 0.3,  "size": 0.5 },
+
+    { "type": "tap",   "beat": 16,   "lane": 0 },
+    { "type": "click", "beat": 16.5 },
+    { "type": "tap",   "beat": 17,   "lane": 1 },
+    { "type": "click", "beat": 17.5 },
+    { "type": "tap",   "beat": 18,   "lane": 2 },
+    { "type": "track", "beat": 18.5, "x": 0.2, "size": 0.3 },
+    { "type": "tap",   "beat": 19,   "lane": 0, "width": 3 },
+    { "type": "flick", "beat": 19.5, "x": 0.6, "size": 0.6 },
+
+    { "type": "trail", "beat": 21, "size": 0.2,
+      "points": [
+        { "beat": 0, "x": 0.3 },
+        { "beat": 2, "x": 0.7, "curve": "smooth" },
+        { "beat": 4, "x": 0.4, "curve": "smooth" }
+      ] }
+  ]
+}

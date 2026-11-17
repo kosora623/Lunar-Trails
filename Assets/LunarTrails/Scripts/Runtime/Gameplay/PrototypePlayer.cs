@@ -20,9 +20,11 @@ namespace LunarTrails.Runtime.Gameplay
     /// 1. シーンに空の GameObject を置き、PrototypePlayer を付ける（必要な部品は自動で付く）。
     /// 2. Chart Json に譜面（例：Charts/sample_stl.json）を入れる。
     /// 3. 曲を鳴らすなら AudioSource の AudioClip に曲を入れる。空でも動く（叩く音だけで確認できる）。
-    /// 4. 再生する。S D F J K L で叩く。Auto Play を ON にすると自動で叩く。
+    /// 4. 再生する。S D F J K L で叩き、マウスでカーソルを動かす・クリックする・払う。
+    ///    Auto Play を ON にすると自動で取る。Esc でマウスの固定を外し、ゲーム画面のクリックで戻す。
     ///
     /// サンプル譜面は BPM 120・オフセット 0 なので、曲を入れるなら頭から一定の BPM 120 の曲を使う。
+    /// マウスノーツを試すなら sample_mouse.json を使う。
     ///
     /// 時刻の扱い：
     /// - 曲の再生位置 … AudioSourceSongClock が返す、音声側の正確な時刻
@@ -35,6 +37,7 @@ namespace LunarTrails.Runtime.Gameplay
     [RequireComponent(typeof(AudioSource))]
     [RequireComponent(typeof(AudioSourceSongClock))]
     [RequireComponent(typeof(KeyLaneInputReader))]
+    [RequireComponent(typeof(MouseLaneInputReader))]
     [RequireComponent(typeof(HitSoundPlayer))]
     [RequireComponent(typeof(PlayfieldView))]
     [RequireComponent(typeof(PrototypeHud))]
@@ -53,11 +56,19 @@ namespace LunarTrails.Runtime.Gameplay
         [Tooltip("最後のノーツから終了までの秒数")]
         [SerializeField] private double _endPaddingSeconds = 2.0;
 
+        [Header("マウスレーンの判定（仮の値。試遊で決める）")]
+        [Tooltip("フリック成功とみなす速さ（1 秒にマウスレーン何本分動いたか）")]
+        [SerializeField] private float _flickSpeedThreshold = 4f;
+
+        [Tooltip("トラック：ノーツの幅の外側に持たせる余裕（マウスレーンの幅 = 1）")]
+        [SerializeField] private float _trackMargin = 0.05f;
+
         // オートプレイの叩く音を、どれだけ先まで予約しておくか（秒）
         private const double HitSoundLookAhead = 0.2;
 
         private AudioSourceSongClock _clock;
         private KeyLaneInputReader _input;
+        private MouseLaneInputReader _mouse;
         private HitSoundPlayer _hitSound;
         private PlayfieldView _view;
         private PrototypeHud _hud;
@@ -67,6 +78,8 @@ namespace LunarTrails.Runtime.Gameplay
 
         // 1 回のプレイごとに作り直すもの
         private KeyLaneJudge _judge;
+        private MouseLaneJudge _mouseJudge;
+        private double _previousGameTime;
         private AutoPlay _autoPlayer;
         private JudgeStats _stats;
         private readonly HashSet<int> _judgedNotes = new HashSet<int>();
@@ -78,6 +91,7 @@ namespace LunarTrails.Runtime.Gameplay
         {
             _clock = GetComponent<AudioSourceSongClock>();
             _input = GetComponent<KeyLaneInputReader>();
+            _mouse = GetComponent<MouseLaneInputReader>();
             _hitSound = GetComponent<HitSoundPlayer>();
             _view = GetComponent<PlayfieldView>();
             _hud = GetComponent<PrototypeHud>();
@@ -120,8 +134,15 @@ namespace LunarTrails.Runtime.Gameplay
             _clock.Stop();
             _hitSound.StopAll();
             _input.Clear();
+            _mouse.Clear();
 
             _judge = new KeyLaneJudge(_chart);
+            _mouseJudge = new MouseLaneJudge(_chart, settings: new MouseJudgeSettings
+            {
+                FlickSpeedThreshold = _flickSpeedThreshold,
+                TrackMargin = _trackMargin,
+            });
+            _previousGameTime = double.NegativeInfinity;
             _autoPlayer = new AutoPlay(_chart);
             _stats = new JudgeStats();
             _judgedNotes.Clear();
@@ -138,30 +159,45 @@ namespace LunarTrails.Runtime.Gameplay
 
             double songTime = _clock.SongTime;
             double gameTime = _offset.ToGameTime(songTime);
+            float cursorX, cursorSpeed;
 
             if (_autoPlay)
             {
                 ScheduleAutoPlayHitSounds(songTime);
                 foreach (var press in _autoPlayer.Collect(gameTime))
                     Apply(_judge.OnKeyDown(press.Lane, press.Time), playSound: false);
-                _input.Clear(); // オートプレイ中は手の入力を使わない
+                foreach (var clickTime in _autoPlayer.CollectClicks(gameTime))
+                    Apply(_mouseJudge.OnClick(clickTime), playSound: false);
+                cursorX = _autoPlayer.CursorX(gameTime);
+                cursorSpeed = _autoPlayer.CursorSpeed(_previousGameTime, gameTime);
+
+                // オートプレイ中は手の入力を使わない
+                _input.Clear();
+                _mouse.DrainClicks();
             }
             else
             {
+                // 入力イベントの時刻を、ゲームの時刻に直す。
+                // 「今のゲームの時刻」から「押されてから今までの経過時間」を引く。
+                double now = Time.realtimeSinceStartupAsDouble;
                 foreach (var press in _input.DrainPresses())
-                {
-                    // 入力イベントの時刻を、ゲームの時刻に直す。
-                    // 「今のゲームの時刻」から「押されてから今までの経過時間」を引く。
-                    double pressedAt = gameTime - (Time.realtimeSinceStartupAsDouble - press.RealTime);
-                    Apply(_judge.OnKeyDown(press.Lane, pressedAt), playSound: true);
-                }
+                    Apply(_judge.OnKeyDown(press.Lane, gameTime - (now - press.RealTime)), playSound: true);
+                foreach (var clickAt in _mouse.DrainClicks())
+                    Apply(_mouseJudge.OnClick(gameTime - (now - clickAt)), playSound: true);
+                cursorX = _mouse.CursorX;
+                cursorSpeed = _mouse.Speed;
             }
+
+            // トラックとフリックは、このフレームのカーソルの状態で判定する
+            foreach (var result in _mouseJudge.Update(gameTime, cursorX, cursorSpeed))
+                Apply(result, playSound: !_autoPlay);
 
             foreach (var miss in _judge.CollectMisses(gameTime))
                 Apply(miss, playSound: false);
 
-            _view.Render(gameTime, note => _judgedNotes.Contains(note.Index), lane => !_autoPlay && _input.IsHeld(lane));
-            UpdateHud(gameTime);
+            _view.Render(gameTime, note => _judgedNotes.Contains(note.Index), lane => !_autoPlay && _input.IsHeld(lane), cursorX);
+            UpdateHud(gameTime, cursorSpeed);
+            _previousGameTime = gameTime;
         }
 
         private void Apply(JudgeResult? result, bool playSound)
@@ -172,7 +208,8 @@ namespace LunarTrails.Runtime.Gameplay
             _judgedNotes.Add(r.Note.Index);
             _stats.Add(r);
             _hud.ShowJudgement(r);
-            if (playSound && r.Judgement != Judgement.Miss) _hitSound.PlayNow();
+            // トラックは重ねるだけのノーツなので音は鳴らさない
+            if (playSound && r.Judgement != Judgement.Miss && r.Note.Type != NoteType.Track) _hitSound.PlayNow();
         }
 
         // ===== オートプレイの叩く音 =====
@@ -183,7 +220,10 @@ namespace LunarTrails.Runtime.Gameplay
             var times = new List<double>();
             foreach (var note in chart.Notes)
             {
-                if (note.Type != NoteType.Tap && note.Type != NoteType.Long) continue;
+                // 叩く・クリックする・払うノーツで鳴らす（トラックとガイドは鳴らさない）
+                bool sounds = note.Type == NoteType.Tap || note.Type == NoteType.Long
+                    || note.Type == NoteType.Click || note.Type == NoteType.Flick;
+                if (!sounds) continue;
                 if (times.Count > 0 && System.Math.Abs(times[times.Count - 1] - note.Time) < 0.001) continue;
                 times.Add(note.Time);
             }
@@ -220,8 +260,10 @@ namespace LunarTrails.Runtime.Gameplay
             PlayerPrefs.Save();
         }
 
-        private void UpdateHud(double gameTime)
+        private void UpdateHud(double gameTime, float cursorSpeed)
         {
+            _hud.CursorSpeed = cursorSpeed;
+            _hud.FlickSpeedThreshold = _flickSpeedThreshold;
             _hud.Stats = _stats;
             _hud.Title = $"{_chart.Song} [{_chart.Difficulty}] Lv.{_chart.Level}";
             _hud.AutoPlay = _autoPlay;
