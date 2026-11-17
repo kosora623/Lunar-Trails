@@ -99,22 +99,21 @@ namespace LunarTrails.Core.Tests
         }
 
         [Test]
-        public void トレイル上のクリックを押し直すために一瞬離しても切れない()
+        public void 片方のボタンで押さえたままもう片方でクリックすれば切れない()
         {
-            var settings = new MouseJudgeSettings { TrailTickBeats = 0.5, TrailReleaseGrace = 0.15 };
+            var settings = new MouseJudgeSettings { TrailTickBeats = 0.5 };
             var chart = ChartOf(
                 Trail(1, false, P(0, 0.5f), P(2, 0.5f)),
                 new NoteData { type = "click", beat = 2 }); // トレイルの途中（チェックと同じ時刻）にクリック
             var judge = new MouseLaneJudge(chart, settings: settings);
             var stats = new JudgeStats();
 
-            stats.Add(judge.OnClick(1.0).Value); // 始点
+            stats.Add(judge.OnClick(1.0).Value); // 始点（左ボタンで押さえる）
             for (double t = 1.0; t < 3.2; t += 1.0 / 60)
             {
-                // 1.9 秒で離し、2.06 秒で押し直す（＝少し遅れたクリック）。2.0 秒のチェックの猶予（±50ms）は離したまま過ぎる
-                bool held = !(t >= 1.9 && t < 2.06);
-                if (System.Math.Abs(t - 2.06) < 1.0 / 120) stats.Add(judge.OnClick(t).Value);
-                foreach (var r in judge.Update(t, 0.5f, 0f, held)) stats.Add(r);
+                // 左ボタンは押したまま。2.0 秒に右ボタンでクリック
+                if (System.Math.Abs(t - 2.0) < 1.0 / 120) stats.Add(judge.OnClick(t).Value);
+                foreach (var r in judge.Update(t, 0.5f, 0f, buttonHeld: true)) stats.Add(r);
             }
 
             Assert.AreEqual(0, judge.PendingCount);
@@ -122,9 +121,22 @@ namespace LunarTrails.Core.Tests
         }
 
         [Test]
+        public void 一瞬だけ指が浮いても猶予の中なら切れない()
+        {
+            var settings = new MouseJudgeSettings { TrailTickBeats = 0.5, TrailReleaseGrace = 0.05, TrailTickWindow = 0.02 };
+            var judge = new MouseLaneJudge(ChartOf(Trail(1, false, P(0, 0.5f), P(1, 0.5f))), settings: settings);
+            judge.OnClick(1.0);
+
+            judge.Update(1.47, 0.5f, 0f, buttonHeld: true);  // ここで指が浮く
+            var results = judge.Update(1.5, 0.5f, 0f, buttonHeld: false); // 0.03 秒後のチェック
+
+            Assert.AreEqual(Judgement.PerfectPlus, results[0].Judgement);
+        }
+
+        [Test]
         public void 猶予より長く離すとMISS()
         {
-            var settings = new MouseJudgeSettings { TrailTickBeats = 0.5, TrailReleaseGrace = 0.15, TrailTickWindow = 0.05 };
+            var settings = new MouseJudgeSettings { TrailTickBeats = 0.5, TrailReleaseGrace = 0.05, TrailTickWindow = 0.05 };
             var judge = new MouseLaneJudge(ChartOf(Trail(1, false, P(0, 0.5f), P(1, 0.5f))), settings: settings);
             judge.OnClick(1.0);
 

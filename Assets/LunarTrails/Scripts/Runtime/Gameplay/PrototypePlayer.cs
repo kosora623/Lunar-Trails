@@ -63,8 +63,8 @@ namespace LunarTrails.Runtime.Gameplay
         [Tooltip("トラック：ノーツの幅の外側に持たせる余裕（マウスレーンの幅 = 1）")]
         [SerializeField] private float _trackMargin = 0.05f;
 
-        [Tooltip("トレイル：ボタンを離しても、この秒数以内なら押したままとみなす")]
-        [SerializeField] private double _trailReleaseGrace = 0.15;
+        [Tooltip("トレイル：ボタンを離しても、この秒数以内なら押したままとみなす（指が一瞬浮いたとき用。長くしすぎると同じボタンで押し直せてしまう）")]
+        [SerializeField] private double _trailReleaseGrace = 0.05;
 
         // オートプレイの叩く音を、どれだけ先まで予約しておくか（秒）
         private const double HitSoundLookAhead = 0.2;
