@@ -42,6 +42,12 @@ namespace LunarTrails.Runtime.Audio
             _scheduled = true;
         }
 
+        /// <summary>
+        /// 曲の再生位置（秒）を、AudioSettings.dspTime の時刻に直す。
+        /// 叩く音を AudioSource.PlayScheduled で正確な時刻に鳴らすときに使う。
+        /// </summary>
+        public double SongTimeToDspTime(double songTime) => _startDspTime + songTime;
+
         public void Stop()
         {
             _source.Stop();
