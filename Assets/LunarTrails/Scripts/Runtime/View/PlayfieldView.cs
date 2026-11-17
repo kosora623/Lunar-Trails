@@ -13,7 +13,7 @@ namespace LunarTrails.Runtime.View
     /// UI 案が決まったら、このクラスごと本番の表示に置き換える。判定や時計のコードは変えなくてよい。
     ///
     /// 色は企画書のノーツの色（タップ青、トラック黄、フリック赤、トレイルオレンジ、ガイド白）だけ合わせている。
-    /// トレイルの smooth は、今は直線でつないでいる（曲線は未実装）。
+    /// トレイルの軌道は Core の TrailPath で計算するので、判定と同じ形になる。
     /// </remarks>
     public sealed class PlayfieldView : MonoBehaviour
     {
@@ -23,6 +23,7 @@ namespace LunarTrails.Runtime.View
         private const float LaneLength = 40f;
         private const float NoteThickness = 0.1f;
         private const float NoteDepth = 0.3f;
+        private const int TrailSmoothSteps = 8;
 
         [Tooltip("ノーツの流れる速さ（1 秒に進む距離）")]
         [SerializeField] private float _scrollSpeed = 16f;
@@ -39,7 +40,8 @@ namespace LunarTrails.Runtime.View
             public Note Note;
             public Transform Head;               // ノーツ本体（トレイルでは null）
             public Transform LongBody;           // ロングの帯
-            public List<Transform> TrailSegments; // トレイルの区間
+            public List<Transform> TrailSegments; // トレイルを細かく区切った区間
+            public double[] TrailSampleTimes;     // 区間の境目の時刻（TrailSegments より 1 つ多い）
         }
 
         // ===== レーン配置の計算 =====
@@ -128,9 +130,13 @@ namespace LunarTrails.Runtime.View
 
                 if (obj.Head != null)
                 {
-                    bool show = inRange && !isJudged(note) && untilHit > -0.2;
+                    // トレイルの頭は終点のフリック。判定済みかどうかは見ず、時刻を過ぎたら消す
+                    bool isTrail = note.Type == NoteType.Trail;
+                    double headTime = isTrail ? note.EndTime : note.Time;
+                    double untilHead = headTime - gameTime;
+                    bool show = untilHead < visibleSeconds && untilHead > -0.2 && (isTrail || !isJudged(note));
                     obj.Head.gameObject.SetActive(show);
-                    if (show) SetZ(obj.Head, ZAt(note.Time, gameTime));
+                    if (show) SetZ(obj.Head, ZAt(headTime, gameTime));
                 }
 
                 if (obj.LongBody != null)
@@ -148,19 +154,20 @@ namespace LunarTrails.Runtime.View
 
                 if (obj.TrailSegments != null)
                 {
-                    var points = note.TrailPoints;
+                    var times = obj.TrailSampleTimes;
                     for (int i = 0; i < obj.TrailSegments.Count; i++)
                     {
                         var seg = obj.TrailSegments[i];
-                        var a = points[i];
-                        var b = points[i + 1];
-                        bool show = gameTime < b.Time && a.Time - gameTime < visibleSeconds;
+                        double ta = times[i], tb = times[i + 1];
+                        bool show = gameTime < tb && ta - gameTime < visibleSeconds;
                         seg.gameObject.SetActive(show);
                         if (show)
                         {
-                            var from = new Vector3(MouseLaneX(a.X), 0, ZAt(a.Time, gameTime));
-                            var to = new Vector3(MouseLaneX(b.X), 0, ZAt(b.Time, gameTime));
-                            PlaceBetween(seg, from, to, note.Size * MouseLaneWidth);
+                            // 判定ラインより手前に出た部分は切る
+                            double from = System.Math.Max(ta, gameTime);
+                            var a = new Vector3(MouseLaneX(TrailPath.XAt(note, from)), 0, ZAt(from, gameTime));
+                            var b = new Vector3(MouseLaneX(TrailPath.XAt(note, tb)), 0, ZAt(tb, gameTime));
+                            PlaceBetween(seg, a, b, note.Size * MouseLaneWidth);
                         }
                     }
                 }
@@ -207,13 +214,33 @@ namespace LunarTrails.Runtime.View
                     break;
                 }
                 case NoteType.Trail:
-                    obj.TrailSegments = new List<Transform>();
-                    for (int i = 0; i < note.TrailPoints.Count - 1; i++)
+                {
+                    // 曲線を細かい直線の区間に分けて描く（直線の区間は 1 つ、なめらかな区間は TrailSmoothSteps 個）
+                    var times = new List<double> { note.TrailPoints[0].Time };
+                    for (int i = 1; i < note.TrailPoints.Count; i++)
                     {
-                        obj.TrailSegments.Add(CreateBox($"{name} seg{i}", _noteRoot, Vector3.zero, Vector3.one,
-                            Materials.Get(new Color(1f, 0.55f, 0.1f))).transform);
+                        var a = note.TrailPoints[i - 1];
+                        var b = note.TrailPoints[i];
+                        int steps = b.Curve == CurveType.Smooth ? TrailSmoothSteps : 1;
+                        for (int k = 1; k <= steps; k++)
+                            times.Add(a.Time + (b.Time - a.Time) * k / steps);
+                    }
+                    obj.TrailSampleTimes = times.ToArray();
+                    obj.TrailSegments = new List<Transform>();
+                    var trailMaterial = Materials.Get(new Color(1f, 0.55f, 0.1f));
+                    for (int i = 0; i < times.Count - 1; i++)
+                        obj.TrailSegments.Add(CreateBox($"{name} seg{i}", _noteRoot, Vector3.zero, Vector3.one, trailMaterial).transform);
+
+                    // 終点のフリック（あるときだけ）は、普通のフリックと同じ赤い板で終点に置く
+                    if (note.EndFlick)
+                    {
+                        var last = note.TrailPoints[note.TrailPoints.Count - 1];
+                        obj.Head = CreateBox(name + " end flick", _noteRoot, new Vector3(MouseLaneX(last.X), 0.02f, 0),
+                            new Vector3(Mathf.Max(0.1f, note.Size * MouseLaneWidth), NoteThickness, NoteDepth),
+                            Materials.Get(new Color(1f, 0.2f, 0.2f))).transform;
                     }
                     break;
+                }
             }
             return obj;
         }

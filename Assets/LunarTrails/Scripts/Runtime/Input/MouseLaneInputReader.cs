@@ -33,6 +33,16 @@ namespace LunarTrails.Runtime.Input
 
         public float PixelsPerLane => _pixelsPerLane;
 
+        /// <summary>マウスのボタン（左右どちらか）を押しているか。トレイルの判定に使う。</summary>
+        public bool IsButtonHeld
+        {
+            get
+            {
+                var mouse = Mouse.current;
+                return mouse != null && (mouse.leftButton.isPressed || mouse.rightButton.isPressed);
+            }
+        }
+
         private void OnEnable()
         {
             InputSystem.onEvent += OnInputEvent;

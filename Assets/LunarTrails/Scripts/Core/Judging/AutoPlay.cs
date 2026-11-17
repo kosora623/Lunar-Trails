@@ -29,9 +29,10 @@ namespace LunarTrails.Core.Judging
         private readonly List<Note> _clicks = new List<Note>();
         private int _nextClick;
 
-        // カーソルを動かす目標になるノーツ（トラックとフリック）と、フリックだけの一覧
-        private readonly List<Note> _cursorTargets = new List<Note>();
+        // カーソルを動かす目標の位置（トラック、フリック、トレイルの始点と終点）と、フリックする時刻
+        private readonly List<(double time, float x)> _cursorTargets = new List<(double, float)>();
         private readonly List<double> _flickTimes = new List<double>();
+        private readonly List<Note> _trails = new List<Note>();
 
         public AutoPlay(Chart chart)
         {
@@ -40,14 +41,23 @@ namespace LunarTrails.Core.Judging
                 // KeyLaneJudge が判定するノーツと同じ種類だけを押す
                 if (note.Type == NoteType.Tap || note.Type == NoteType.Long)
                     _targets.Add(note);
-                else if (note.Type == NoteType.Click)
-                    _clicks.Add(note);
+                else if (note.Type == NoteType.Click || note.Type == NoteType.Trail)
+                    _clicks.Add(note); // トレイルは始点でクリックする
 
                 if (note.Type == NoteType.Track || note.Type == NoteType.Flick)
-                    _cursorTargets.Add(note);
+                    _cursorTargets.Add((note.Time, note.X));
                 if (note.Type == NoteType.Flick)
                     _flickTimes.Add(note.Time);
+
+                if (note.Type == NoteType.Trail)
+                {
+                    _trails.Add(note);
+                    _cursorTargets.Add((note.Time, TrailPath.XAt(note, note.Time)));
+                    _cursorTargets.Add((note.EndTime, TrailPath.XAt(note, note.EndTime)));
+                    if (note.EndFlick) _flickTimes.Add(note.EndTime);
+                }
             }
+            _cursorTargets.Sort((a, b) => a.time.CompareTo(b.time));
         }
 
         /// <summary>前回呼んでから songTime までに押すべきキーを、時刻順に返す。毎フレーム呼ぶ。</summary>
@@ -72,23 +82,39 @@ namespace LunarTrails.Core.Judging
         }
 
         /// <summary>
-        /// オートプレイのカーソル位置。トラックとフリックの位置を、時刻に合わせて直線でつないで動く。
+        /// オートプレイのカーソル位置。トレイルの間はトレイルの軌道をなぞり、
+        /// それ以外はトラック・フリック・トレイルの端の位置を、時刻に合わせて直線でつないで動く。
         /// </summary>
         public float CursorX(double time)
         {
+            foreach (var trail in _trails)
+            {
+                if (time >= trail.Time && time <= trail.EndTime) return TrailPath.XAt(trail, time);
+            }
+
             if (_cursorTargets.Count == 0) return 0.5f;
-            if (time <= _cursorTargets[0].Time) return _cursorTargets[0].X;
+            if (time <= _cursorTargets[0].time) return _cursorTargets[0].x;
 
             for (int i = 1; i < _cursorTargets.Count; i++)
             {
                 var b = _cursorTargets[i];
-                if (time > b.Time) continue;
+                if (time > b.time) continue;
                 var a = _cursorTargets[i - 1];
-                double span = b.Time - a.Time;
-                float t = span <= 0 ? 1f : (float)((time - a.Time) / span);
-                return a.X + (b.X - a.X) * t;
+                double span = b.time - a.time;
+                float t = span <= 0 ? 1f : (float)((time - a.time) / span);
+                return a.x + (b.x - a.x) * t;
             }
-            return _cursorTargets[_cursorTargets.Count - 1].X;
+            return _cursorTargets[_cursorTargets.Count - 1].x;
+        }
+
+        /// <summary>オートプレイがマウスのボタンを押し続けているか（トレイルの間だけ押す）。</summary>
+        public bool IsHolding(double time)
+        {
+            foreach (var trail in _trails)
+            {
+                if (time >= trail.Time && time <= trail.EndTime + 0.1) return true;
+            }
+            return false;
         }
 
         /// <summary>
