@@ -18,6 +18,18 @@ namespace LunarTrails.Core.Judging
         public int MaxCombo { get; private set; }
         public int Total { get; private set; }
 
+        /// <summary>PERFECT+ 以外で、早すぎた（FAST）回数。タイミングを問わない判定は数えない。</summary>
+        public int FastCount { get; private set; }
+
+        /// <summary>PERFECT+ 以外で、遅すぎた（SLOW）回数。</summary>
+        public int SlowCount { get; private set; }
+
+        /// <summary>全体のずれの平均（秒）。タイミングを問う判定がまだなければ null。</summary>
+        public double? AverageOffset => _offsetCount == 0 ? (double?)null : _offsetSum / _offsetCount;
+
+        private double _offsetSum;
+        private int _offsetCount;
+
         public int Count(Judgement judgement) => _counts[(int)judgement];
 
         /// <summary>最近 RecentOffsetCount 回のずれの平均（秒）。まだ1回も取っていなければ null。</summary>
@@ -41,6 +53,15 @@ namespace LunarTrails.Core.Judging
 
             if (result.OffsetSeconds.HasValue)
             {
+                double offset = result.OffsetSeconds.Value;
+                _offsetSum += offset;
+                _offsetCount++;
+                if (result.Judgement != Judgement.PerfectPlus)
+                {
+                    if (offset < 0) FastCount++;
+                    else if (offset > 0) SlowCount++;
+                }
+
                 _recentOffsets.Enqueue(result.OffsetSeconds.Value);
                 _recentOffsetSum += result.OffsetSeconds.Value;
                 if (_recentOffsets.Count > RecentOffsetCount)
