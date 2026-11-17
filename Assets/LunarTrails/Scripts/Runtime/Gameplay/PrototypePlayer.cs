@@ -12,7 +12,13 @@ namespace LunarTrails.Runtime.Gameplay
     /// ノーツの表示はまだない（UI 案が決まってから NoteView を作る）。
     /// </summary>
     /// <remarks>
-    /// 使い方は README の「試作シーンの組み立て方」を参照。
+    /// 試作シーンの組み立て方：
+    /// 1. 空の GameObject に AudioSource、AudioSourceSongClock、KeyLaneInputReader、PrototypePlayer を付ける。
+    /// 2. AudioSource に曲を入れ、Play On Awake を外す。
+    /// 3. PrototypePlayer に譜面 JSON（例：Charts/sample_stl.json）と、同じ GameObject の時計・入力を入れる。
+    /// 4. 再生して S D F J K L を叩くと、Console に判定が出る。
+    /// サンプル譜面は BPM 120・オフセット 0 なので、頭から一定の BPM 120 で始まる曲を使う。
+    ///
     /// 本番のゲーム進行クラスができたら、このクラスは消すか置き換える。
     /// </remarks>
     public sealed class PrototypePlayer : MonoBehaviour
