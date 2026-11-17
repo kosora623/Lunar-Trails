@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "song": "sample",
+  "difficulty": "stl",
+  "level": 1,
+  "offsetMs": 0,
+  "bpm": [{ "beat": 0, "value": 120 }],
+  "notes": [
+    {"type": "tap", "beat": 4, "lane": 0, "width": 1},
+    {"type": "tap", "beat": 5, "lane": 1, "width": 1},
+    {"type": "tap", "beat": 6, "lane": 2, "width": 1},
+    {"type": "tap", "beat": 7, "lane": 3, "width": 1},
+    {"type": "tap", "beat": 8, "lane": 4, "width": 1},
+    {"type": "tap", "beat": 9, "lane": 5, "width": 1},
+    {"type": "tap", "beat": 10, "lane": 4, "width": 1},
+    {"type": "tap", "beat": 11, "lane": 3, "width": 1},
+    {"type": "tap", "beat": 12, "lane": 2, "width": 1},
+    {"type": "tap", "beat": 13, "lane": 1, "width": 1},
+    {"type": "tap", "beat": 14, "lane": 0, "width": 1},
+    {"type": "tap", "beat": 15, "lane": 5, "width": 1},
+    {"type": "tap", "beat": 16, "lane": 0, "width": 3},
+    {"type": "tap", "beat": 17, "lane": 3, "width": 3},
+    {"type": "long", "beat": 18, "lane": 1, "width": 1, "length": 2},
+    {"type": "guide", "beat": 20, "lane": 4, "width": 1}
+  ]
+}
