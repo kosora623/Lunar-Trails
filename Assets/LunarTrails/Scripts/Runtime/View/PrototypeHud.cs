@@ -22,6 +22,11 @@ namespace LunarTrails.Runtime.View
         public bool AutoPlay;
         public int OffsetMs;
         public bool Finished;
+        public float CursorSpeed;
+        public float FlickSpeedThreshold;
+
+        // カーソルの速さは毎フレーム大きく揺れるので、直近の最大値を少しずつ下げながら表示する
+        private float _shownSpeed;
 
         public void ShowJudgement(JudgeResult result)
         {
@@ -57,6 +62,10 @@ namespace LunarTrails.Runtime.View
 
             if (Stats == null) return;
 
+            // OnGUI は 1 フレームに複数回呼ばれるので、描画のときだけ更新する
+            if (Event.current.type == EventType.Repaint)
+                _shownSpeed = Mathf.Max(CursorSpeed, _shownSpeed - 20f * Time.unscaledDeltaTime);
+
             // 左上の情報
             string average = Stats.RecentAverageOffset.HasValue
                 ? $"{Stats.RecentAverageOffset.Value * 1000:+0;-0;0}ms"
@@ -70,8 +79,9 @@ namespace LunarTrails.Runtime.View
                 $"PERFECT+ {Stats.Count(Judgement.PerfectPlus)}  PERFECT {Stats.Count(Judgement.Perfect)}  " +
                 $"HIT {Stats.Count(Judgement.Hit)}  MISS {Stats.Count(Judgement.Miss)}\n" +
                 $"コンボ {Stats.Combo}（最大 {Stats.MaxCombo}）\n" +
+                $"カーソルの速さ {Mathf.Min(_shownSpeed, 99f):0.0}（フリック成功は {FlickSpeedThreshold:0.0} 以上）\n" +
                 $"\n" +
-                $"R: 最初からやり直す\n" +
+                $"R: 最初からやり直す　Esc: マウスの固定を外す\n" +
                 (Finished ? "\n― 終了 ―" : "");
             GUI.Label(new Rect(16, 16, 600, 400), info, _smallStyle);
         }
