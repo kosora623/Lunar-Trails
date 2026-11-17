@@ -91,7 +91,7 @@ namespace LunarTrails.Runtime.View
                 $"コンボ {Stats.Combo}（最大 {Stats.MaxCombo}）\n" +
                 $"カーソルの速さ {Mathf.Min(_shownSpeed, 99f):0.0}（フリック成功は {FlickSpeedThreshold:0.0} 以上）\n" +
                 $"\n" +
-                $"R: 最初からやり直す　Esc: マウスの固定を外す\n";
+                $"R: 最初からやり直す　Esc: 選曲に戻る\n";
             GUI.Label(new Rect(16, 16, 600, 400), info, _smallStyle);
         }
 
@@ -118,7 +118,7 @@ namespace LunarTrails.Runtime.View
                 $"最大コンボ {r.MaxCombo} / {r.Total}\n" +
                 $"FAST {r.FastCount}  SLOW {r.SlowCount}  ずれの平均 {average}\n" +
                 $"\n" +
-                $"R: もう一度";
+                $"R: もう一度　Enter: 選曲に戻る";
             _resultStyle.richText = true;
             GUI.Label(new Rect(box.x + 32, box.y + 24, width - 64, height - 48), text, _resultStyle);
         }

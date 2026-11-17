@@ -41,6 +41,18 @@ namespace LunarTrails.Runtime.Input
 
         public IReadOnlyList<Key> LaneKeys => _laneKeys;
 
+        /// <summary>
+        /// キー配置を変える。名前は Input System の Key の名前（"S" や "Space" など）。読めない名前のレーンは今のキーのまま。
+        /// </summary>
+        public void SetLaneKeys(IReadOnlyList<string> keyNames)
+        {
+            for (int lane = 0; lane < _laneKeys.Length && lane < keyNames.Count; lane++)
+            {
+                if (Enum.TryParse(keyNames[lane], out Key key) && key != Key.None)
+                    _laneKeys[lane] = key;
+            }
+        }
+
         private void OnEnable() => InputSystem.onEvent += OnInputEvent;
 
         private void OnDisable() => InputSystem.onEvent -= OnInputEvent;

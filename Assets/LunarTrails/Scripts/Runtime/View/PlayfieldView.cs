@@ -44,6 +44,21 @@ namespace LunarTrails.Runtime.View
             public double[] TrailSampleTimes;     // 区間の境目の時刻（TrailSegments より 1 つ多い）
         }
 
+        /// <summary>ノーツの流れる速さ（1 秒に進む距離）</summary>
+        public float ScrollSpeed
+        {
+            get => _scrollSpeed;
+            set => _scrollSpeed = Mathf.Max(0.1f, value);
+        }
+
+        /// <summary>ノーツを全部消す（メニューに戻ったとき用）。</summary>
+        public void ClearNotes()
+        {
+            if (_noteRoot != null) Destroy(_noteRoot.gameObject);
+            _noteRoot = null;
+            _notes.Clear();
+        }
+
         // ===== レーン配置の計算 =====
 
         /// <summary>キーレーンの中心の X 座標。0〜2 は左、3〜5 は右。</summary>
