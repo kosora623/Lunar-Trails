@@ -35,6 +35,15 @@
         { "beat": 0, "x": 0.3 },
         { "beat": 2, "x": 0.7, "curve": "smooth" },
         { "beat": 4, "x": 0.4, "curve": "smooth" }
-      ] }
+      ] },
+
+    { "type": "trail", "beat": 27, "size": 0.25, "endFlick": true,
+      "points": [
+        { "beat": 0, "x": 0.2 },
+        { "beat": 2, "x": 0.8 },
+        { "beat": 3, "x": 0.8 }
+      ] },
+    { "type": "click", "beat": 28 },
+    { "type": "click", "beat": 29 }
   ]
 }

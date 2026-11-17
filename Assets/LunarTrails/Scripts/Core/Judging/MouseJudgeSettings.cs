@@ -16,5 +16,14 @@ namespace LunarTrails.Core.Judging
 
         /// <summary>フリック：成功とみなすカーソルの速さ（1 秒にマウスレーン何本分動いたか）</summary>
         public float FlickSpeedThreshold = 4f;
+
+        /// <summary>トレイル：途中のチェックを何拍ごとに置くか</summary>
+        public double TrailTickBeats = 0.5;
+
+        /// <summary>トレイル：チェックの時刻の前後この秒数のうちに、なぞれていれば成功</summary>
+        public double TrailTickWindow = 0.05;
+
+        /// <summary>トレイル：帯の幅の外側に持たせる余裕（片側）</summary>
+        public float TrailMargin = 0.08f;
     }
 }

@@ -162,6 +162,7 @@ namespace LunarTrails.Runtime.Gameplay
             double songTime = _clock.SongTime;
             double gameTime = _offset.ToGameTime(songTime);
             float cursorX, cursorSpeed;
+            bool buttonHeld;
 
             if (_autoPlay)
             {
@@ -172,6 +173,7 @@ namespace LunarTrails.Runtime.Gameplay
                     Apply(_mouseJudge.OnClick(clickTime), playSound: false);
                 cursorX = _autoPlayer.CursorX(gameTime);
                 cursorSpeed = _autoPlayer.CursorSpeed(_previousGameTime, gameTime);
+                buttonHeld = _autoPlayer.IsHolding(gameTime);
 
                 // オートプレイ中は手の入力を使わない
                 _input.Clear();
@@ -188,10 +190,11 @@ namespace LunarTrails.Runtime.Gameplay
                     Apply(_mouseJudge.OnClick(gameTime - (now - clickAt)), playSound: true);
                 cursorX = _mouse.CursorX;
                 cursorSpeed = _mouse.Speed;
+                buttonHeld = _mouse.IsButtonHeld;
             }
 
-            // トラックとフリックは、このフレームのカーソルの状態で判定する
-            foreach (var result in _mouseJudge.Update(gameTime, cursorX, cursorSpeed))
+            // トラック、フリック、トレイルの途中は、このフレームのカーソルの状態で判定する
+            foreach (var result in _mouseJudge.Update(gameTime, cursorX, cursorSpeed, buttonHeld))
                 Apply(result, playSound: !_autoPlay);
 
             foreach (var miss in _judge.CollectMisses(gameTime))
@@ -210,8 +213,9 @@ namespace LunarTrails.Runtime.Gameplay
             _judgedNotes.Add(r.Note.Index);
             _stats.Add(r);
             _hud.ShowJudgement(r);
-            // トラックは重ねるだけのノーツなので音は鳴らさない
-            if (playSound && r.Judgement != Judgement.Miss && r.Note.Type != NoteType.Track) _hitSound.PlayNow();
+            // 重ねるだけのトラックと、トレイルの途中のチェック（ずれを持たない判定）では音を鳴らさない
+            bool isTimingJudgement = r.OffsetSeconds.HasValue;
+            if (playSound && r.Judgement != Judgement.Miss && isTimingJudgement) _hitSound.PlayNow();
         }
 
         // ===== オートプレイの叩く音 =====
@@ -224,12 +228,20 @@ namespace LunarTrails.Runtime.Gameplay
             {
                 // 叩く・クリックする・払うノーツで鳴らす（トラックとガイドは鳴らさない）
                 bool sounds = note.Type == NoteType.Tap || note.Type == NoteType.Long
-                    || note.Type == NoteType.Click || note.Type == NoteType.Flick;
+                    || note.Type == NoteType.Click || note.Type == NoteType.Flick || note.Type == NoteType.Trail;
                 if (!sounds) continue;
-                if (times.Count > 0 && System.Math.Abs(times[times.Count - 1] - note.Time) < 0.001) continue;
                 times.Add(note.Time);
+                if (note.Type == NoteType.Trail && note.EndFlick) times.Add(note.EndTime); // 終点のフリック
             }
-            return times;
+
+            // 同じ時刻の音は 1 回だけ鳴らす
+            times.Sort();
+            var unique = new List<double>();
+            foreach (var t in times)
+            {
+                if (unique.Count == 0 || t - unique[unique.Count - 1] >= 0.001) unique.Add(t);
+            }
+            return unique;
         }
 
         private void ScheduleAutoPlayHitSounds(double songTime)
