@@ -91,7 +91,9 @@ namespace LunarTrails.Runtime.Gameplay
         {
             _clock = GetComponent<AudioSourceSongClock>();
             _input = GetComponent<KeyLaneInputReader>();
+            // RequireComponent は、すでにシーンに置いてある PrototypePlayer には後から部品を足さないので、ここで補う
             _mouse = GetComponent<MouseLaneInputReader>();
+            if (_mouse == null) _mouse = gameObject.AddComponent<MouseLaneInputReader>();
             _hitSound = GetComponent<HitSoundPlayer>();
             _view = GetComponent<PlayfieldView>();
             _hud = GetComponent<PrototypeHud>();
